@@ -185,7 +185,7 @@ export function App() {
   }
 
   return (
-    <div className="box-border p-5 relative min-w-screen w-max min-h-screen h-max bg-yellow-50">
+    <div className="box-border p-5 relative w-screen min-h-screen h-max bg-yellow-50">
       <div className="mb-30 flex flex-col gap-16 w-full max-w-864px">
         <div>
           <h3 className="text-xl font-medium mb-4">Amounts in common</h3>
