@@ -1,33 +1,18 @@
+import { Input } from 'Input'
+import { UnstructuredTable } from 'UnstructuredTable'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend } from 'recharts'
-import { MergeStateFunction, useMergeState } from 'useMergeState'
+import { useMergeState } from 'useMergeState'
 import { useScreenDimensions } from 'useScreenDimensions'
 
 const MONTHLY_SNP_GROWTH = 1.006
 const MONTHLY_REAL_ESTATE_GROWTH = 1.0015697
 const ALBERTA_RESIDENTIAL_PROPERTY_TAX = 0.0065718
 
-const Input = <T extends { [key: string]: unknown }>({ state, mergeState, prop }: { state: T, mergeState: MergeStateFunction<T>, prop: keyof T}) => {
-  const isCheckbox = prop === 'HAS_MORTGAGE_INSURANCE'
-
-  const props: React.InputHTMLAttributes<HTMLInputElement> = {
-    type: isCheckbox ? 'checkbox' : undefined,
-    [isCheckbox ? 'checked' : 'value']: state[prop]
-  }
-
-  return (
-    <div>
-      <label className="font-bold" htmlFor={prop as string}>{(prop as string).split('_').map(str => str[0] + str.toLowerCase().slice(1)).join(' ')}</label>
-      <br />
-      {/* @ts-expect-error no need to control mergeState types further */}
-      <input id={prop as string} {...props} onChange={(e) => mergeState({ [prop]: isCheckbox ? !state[prop] : Number(e.target.value) })} />
-    </div>
-  )
-}
+const MONTH_TO_STRING = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
 export function App() {
   const [stagingState, mergeStagingState] = useMergeState({
     DOWN_PAYMENT: 120000,
-    MONTHLY_BUDGET: 5000,
     
     HOME_PRICE: 600000,
     MORTGAGE_RATE_PERCENT: 6,
@@ -36,7 +21,7 @@ export function App() {
     HAS_MORTGAGE_INSURANCE: true,
     HOME_MAINTENANCE_BUDGET: 400,
     HOME_OWNERS_INSURANCE: 200,
-    HOMEBUYER_LEGAL_FEES: 10000,
+    HOMEBUYER_LEGAL_FEES: 2000,
     HOME_OWNER_UTILITIES: 250,
     HOME_OWNER_OTHER_EXPENSES: 0,
 
@@ -52,7 +37,6 @@ export function App() {
 
   const {
     DOWN_PAYMENT,
-    MONTHLY_BUDGET,
 
     HOME_PRICE,
     MORTGAGE_RATE_PERCENT,
@@ -97,7 +81,9 @@ export function App() {
   const APR_RATE = (EAR_RATE ** (1 / 12)) - 1
   const MONTHLY_MORTGAGE_PAYMENT = ORIGINAL_PRINCIPAL * (APR_RATE * (1 + APR_RATE) ** MORTGAGE_MONTHS) / ((1 + APR_RATE) ** MORTGAGE_MONTHS - 1)
   const MONTHLY_PROPERTY_TAX = ALBERTA_RESIDENTIAL_PROPERTY_TAX * HOME_PRICE / 12
+
   const data = []
+  const tableData = []
 
   let mortgageInsurancePremium = 0
 
@@ -119,10 +105,9 @@ export function App() {
     }
   }
   
-  const MINIMUM_MONTHLY_BUDGET = Math.max(
-    MONTHLY_RENT + RENTERS_INSURANCE + RENTER_UTILITIES + RENTER_OTHER_EXPENSES,
-    MONTHLY_MORTGAGE_PAYMENT + HOME_OWNERS_INSURANCE + MONTHLY_PROPERTY_TAX + mortgageInsurancePremium + HOME_OWNER_UTILITIES + HOME_MAINTENANCE_BUDGET + HOME_OWNER_OTHER_EXPENSES
-  )
+  const rentersBudget = MONTHLY_RENT + RENTERS_INSURANCE + RENTER_UTILITIES + RENTER_OTHER_EXPENSES
+  const homeownersBudget = MONTHLY_MORTGAGE_PAYMENT + HOME_OWNERS_INSURANCE + MONTHLY_PROPERTY_TAX + mortgageInsurancePremium + HOME_OWNER_UTILITIES + HOME_MAINTENANCE_BUDGET + HOME_OWNER_OTHER_EXPENSES
+  const MONTHLY_BUDGET = Math.max(rentersBudget, homeownersBudget)
   
   let year = new Date().getFullYear()
   let month = 0
@@ -131,6 +116,11 @@ export function App() {
   for (let i = 0; i < MORTGAGE_MONTHS; i++) {
     const interestPaidThisMonth = homeOwner.mortgage * APR_RATE
     const equityBuiltThisMonth = MONTHLY_MORTGAGE_PAYMENT - interestPaidThisMonth
+
+    const renterStocksGrowth = renter.stocks * (MONTHLY_SNP_GROWTH - 1)
+    const renterPropertiesGrowth = renter.properties * (MONTHLY_REAL_ESTATE_GROWTH - 1)
+    const homeownerStocksGrowth = homeOwner.stocks * (MONTHLY_SNP_GROWTH - 1)
+    const homeownerPropertiesGrowth = homeOwner.properties * (MONTHLY_REAL_ESTATE_GROWTH - 1)
 
     renter.budget = MONTHLY_BUDGET
     homeOwner.budget = MONTHLY_BUDGET
@@ -160,6 +150,18 @@ export function App() {
     renter.stocks += renter.budget
     homeOwner.stocks += homeOwner.budget
 
+    tableData.push({
+      year,
+      month: MONTH_TO_STRING[month],
+      "Mortgage payment": MONTHLY_MORTGAGE_PAYMENT.toFixed(2),
+      "Mortgage interest paid": interestPaidThisMonth.toFixed(2),
+      "Mortage equity built": equityBuiltThisMonth.toFixed(2),
+      "Homeowner's investments growth": homeownerStocksGrowth.toFixed(2),
+      "Homeowner's home value growth": homeownerPropertiesGrowth.toFixed(2),
+      "Renter's investments growth": renterStocksGrowth.toFixed(2),
+      "Renter's home value growth": renterPropertiesGrowth.toFixed(2),
+    })
+
     if (month < 11) {
       month++
     } else {
@@ -183,35 +185,45 @@ export function App() {
   }
 
   return (
-    <div className="box-border p-5 relative w-screen min-h-screen h-max bg-slate-200">
-      <div className="mb-30 flex w-full justify-between">
-        <div className="flex flex-col gap-4 w-1/3">
-          <Input state={stagingState} mergeState={mergeStagingState} prop='DOWN_PAYMENT' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='MONTHLY_BUDGET' />
+    <div className="box-border p-5 relative min-w-screen w-max min-h-screen h-max bg-yellow-50">
+      <div className="mb-30 flex flex-col gap-16 w-full max-w-864px">
+        <div>
+          <h3 className="text-xl font-medium mb-4">Amounts in common</h3>
+          <div className="flex flex-wrap gap-4">
+            <Input state={stagingState} mergeState={mergeStagingState} prop='DOWN_PAYMENT' />
+          </div>
         </div>
-        <div className="flex flex-col gap-4 w-1/3">
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_PRICE' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='MORTGAGE_RATE_PERCENT' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='MORTGAGE_YEARS' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='TENANT_INCOME' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HAS_MORTGAGE_INSURANCE' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_MAINTENANCE_BUDGET' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_OWNERS_INSURANCE' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HOMEBUYER_LEGAL_FEES' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_OWNER_UTILITIES' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_OWNER_OTHER_EXPENSES' />
+        <div>
+          <h3 className="text-xl font-medium mb-4">Amounts for homeowner</h3>
+          <div className="flex flex-wrap gap-4">
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_PRICE' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='MORTGAGE_RATE_PERCENT' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='MORTGAGE_YEARS' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='TENANT_INCOME' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HAS_MORTGAGE_INSURANCE' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_MAINTENANCE_BUDGET' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_OWNERS_INSURANCE' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HOMEBUYER_LEGAL_FEES' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_OWNER_UTILITIES' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='HOME_OWNER_OTHER_EXPENSES' />
+          </div>
         </div>
-        <div className="flex flex-col gap-4 w-1/3">
-          <Input state={stagingState} mergeState={mergeStagingState} prop='MONTHLY_RENT' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='RENTERS_INSURANCE' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='RENTER_UTILITIES' />
-          <Input state={stagingState} mergeState={mergeStagingState} prop='RENTER_OTHER_EXPENSES' />
+        <div>
+          <h3 className="text-xl font-medium mb-4">Amounts for renter</h3>
+          <div className="flex flex-wrap gap-4">
+            <Input state={stagingState} mergeState={mergeStagingState} prop='MONTHLY_RENT' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='RENTERS_INSURANCE' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='RENTER_UTILITIES' />
+            <Input state={stagingState} mergeState={mergeStagingState} prop='RENTER_OTHER_EXPENSES' />
+          </div>
         </div>
       </div>
+      <h2 className="text-2xl font-medium mb-4">Net worth over time</h2>
       <LineChart 
         data={data}
         width={width * 0.75}
         height={height * 0.75}
+        className='bg-white border-1 border-black mb-18'
         margin={{
           top: 15,
           right: 15,
@@ -226,21 +238,19 @@ export function App() {
         <Line type="monotone" dataKey="Renter" stroke="#8884d8" />
         <Line type="monotone" dataKey="Homeowner" stroke="#82ca9d" />
       </LineChart>
-      <div className="font-bold">Minimum monthly housing budget: ${MINIMUM_MONTHLY_BUDGET.toFixed(2)}</div>
-      <div className="mt-8 flex w-full justify-between">
-        <div className="mt-8 flex flex-col gap-4 w-1/2">
-          <div>Mortgage rate of {MORTGAGE_RATE_PERCENT}%</div>
-          <div>Home value of ${HOME_PRICE}</div>
-          <div>Down payment of ${DOWN_PAYMENT}</div>
-          <div>Original mortgage principal of ${ORIGINAL_PRINCIPAL}</div>
-          <div>Mortgage period of {MORTGAGE_YEARS} years</div>
-          <div>Monthly mortgage payment of ${MONTHLY_MORTGAGE_PAYMENT.toFixed(2)}</div>
-          <div>Monthly property tax of ${MONTHLY_PROPERTY_TAX.toFixed(2)}</div>
-          <div>Monthly homeowners insurance of ${HOME_OWNERS_INSURANCE.toFixed(2)}</div>
-          <div>Monthly mortgage insurance premium of ${mortgageInsurancePremium.toFixed(2)}</div>
-          <div>Total mortgage insurance premium of ${(mortgageInsurancePremium * MORTGAGE_MONTHS).toFixed(2)}</div>
-        </div>
+      <h2 className="text-2xl font-medium mb-4">Breakdown</h2>
+      <div className="flex flex-col gap-8 mb-18">
+        <p>Based on the amount you expect to be spending in either scenario, <span className="italic">your monthly budget for housing is ${MONTHLY_BUDGET.toFixed(2)}</span></p>
+        <p>We'll take this housing budget, and run a month-by-month simulation for the duration of your mortgage. The simulation is as follows:</p>
+        <p>Each month, you start with an amount of funds equal to the budget above.</p>
+        <p>You spend what is required to keep your current residence; paying rent and renter's insurance, or the various expenses of homeownership.</p>
+        <p>In the case of paying a mortgage, the value of your mortgage will gradually go down, increasing the amount you stand to gain upon selling the property.</p>
+        <p>You may also earn some income from owning the property, in which case, your budget for the month will be bolstered with that income.</p>
+        <p>The value of your assets in both the real estate and stock markets appreciates at the average monthly rate.</p>
+        <p>Finally, you take any unspent funds for the month and invest them in the stock market.</p>
       </div>
+      <h2 className="text-2xl font-medium mb-4">Month-by-month data table</h2>
+      <UnstructuredTable data={tableData} />
     </div>
   )
 }
