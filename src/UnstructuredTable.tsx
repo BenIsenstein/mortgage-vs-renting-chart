@@ -28,6 +28,7 @@ export function UnstructuredTable(props: { data: DataObject[] }) {
 
         for (const col of columns) {
             const value = row[col] ?? ''
+            
             tdatas.push(
                 <td
                     key={col + value}

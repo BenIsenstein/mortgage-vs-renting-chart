@@ -1,14 +1,8 @@
 import { useState, useCallback } from 'react'
 
-export type MergeStateFunction<T> = (
-	value: Partial<T> | ((state: T) => Partial<T>)
-) => void
+export type MergeStateFunction<T extends object> = (value: Partial<T> | ((state: T) => Partial<T>)) => void
 
-type UseMergeStateTuple<T> = [T, MergeStateFunction<T>]
-
-export const useMergeState = <T extends object>(
-	initialState: T
-): UseMergeStateTuple<T> => {
+export function useMergeState<T extends object>(initialState: T): [T, MergeStateFunction<T>] {
 	const [state, setState] = useState(initialState)
 
 	const mergeState: MergeStateFunction<T> = useCallback((value) => {

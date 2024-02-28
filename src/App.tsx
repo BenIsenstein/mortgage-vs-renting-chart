@@ -250,7 +250,9 @@ export function App() {
         <p>Finally, you take any unspent funds for the month and invest them in the stock market.</p>
       </div>
       <h2 className="text-2xl font-medium mb-4">Month-by-month data table</h2>
-      <UnstructuredTable data={tableData} />
+      <div className="w-full h-max max-h-90vh overflow-scroll">
+        <UnstructuredTable data={tableData} />
+      </div>
     </div>
   )
 }
